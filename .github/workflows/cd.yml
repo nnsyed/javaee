@@ -32,7 +32,7 @@ jobs:
         mvn clean package -pl servlet-app
         mvn clean package -pl ejb-jsp-app
         mvn clean package -pl rest-app
-        mvn clean package -pl jdbc-app
+        #mvn clean package -pl jdbc-app
         echo "done with the builds."
     # Step 4: Add your CD Deployment commands here
     # Example: If deploying via wildfly-maven-plugin using a profile:
