@@ -1,0 +1,1 @@
+$JBOSS_HOME/bin/jboss-cli.sh --connect --command="deploy /path/to/target/scott-app.war"

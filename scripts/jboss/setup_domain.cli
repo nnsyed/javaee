@@ -1,0 +1,119 @@
+# ==============================================================================
+# setup_domain.cli
+# One-shot jboss-cli script for a running WildFly managed domain (domain.sh).
+# Mirrors the WebLogic create_domain.py + deploy_apps.py, using the same names.
+#
+# Host folders mounted into the container:
+#   .../javaee-applications/scripts     -> /opt/jboss/scripts    (this file is in scripts/jboss/)
+#   .../javaee-applications/artifacts   -> /opt/jboss/artifacts  (the five applications)
+#   .../javaee-applications/scripts/db  -> /opt/jboss/db         (Oracle JDBC driver jar)
+#
+# The database password comes from the container's DB_PW environment variable
+# (podman run -e DB_PW=...). It is stored as the expression ${env.DB_PW},
+# so the password itself is never written to domain.xml.
+#
+# Run inside the container, in this order:
+#   1. jboss-cli.sh --command="module add --name=com.oracle.ojdbc --resources=/opt/jboss/db/ojdbc11.jar --dependencies=javax.api,javax.transaction.api"
+#   2. jboss-cli.sh -c --file=/opt/jboss/scripts/jboss/setup_domain.cli
+#
+# Run it ONCE on a fresh container. The CLI stops at the first error.
+# ==============================================================================
+
+
+# ---------------------------------------------------------------------------
+# STEP 0: Settings (edit these)
+# ---------------------------------------------------------------------------
+# Host controller name. Check with:  :read-children-names(child-type=host)
+# It is "primary" on newer WildFly versions and "master" on older ones.
+set hostName=master
+set msgClusterPassword=ChangeThisClusterSecret
+set appDir=/opt/jboss/artifacts
+
+
+# ---------------------------------------------------------------------------
+# STEP 1: Oracle JDBC driver module -- run SEPARATELY, before this script.
+#         "module add" is not available while connected to a Domain
+#         Controller, so it runs with the CLI disconnected (no -c):
+#
+#   jboss-cli.sh --command="module add --name=com.oracle.ojdbc --resources=/opt/jboss/db/ojdbc11.jar --dependencies=javax.api,javax.transaction.api"
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# STEPS 2-5 run as one batch: all of it succeeds, or none of it is applied
+# ---------------------------------------------------------------------------
+batch
+
+# STEP 2: JDBC driver + DataSource scottDS in profile full-ha
+#         WebLogic: JDBCSystemResource scottDS, JNDI jdbc/scottDS
+/profile=full-ha/subsystem=datasources/jdbc-driver=oracle:add(driver-name=oracle,driver-module-name=com.oracle.ojdbc,driver-class-name=oracle.jdbc.OracleDriver,driver-xa-datasource-class-name=oracle.jdbc.xa.client.OracleXADataSource)
+
+/profile=full-ha/subsystem=datasources/data-source=scottDS:add(jndi-name="java:jboss/datasources/scottDS",driver-name=oracle,connection-url="jdbc:oracle:thin:@//oracle-ai-scott:1521/FREEPDB1",user-name=scott,password="${env.DB_PW}",min-pool-size=1,max-pool-size=20,validate-on-match=true,background-validation=false,valid-connection-checker-class-name=org.jboss.jca.adapters.jdbc.extensions.oracle.OracleValidConnectionChecker,exception-sorter-class-name=org.jboss.jca.adapters.jdbc.extensions.oracle.OracleExceptionSorter,enabled=true)
+
+# STEP 3: JMS in profile full-ha
+#         WebLogic ScottJMSServer/ScottJMSModule -> the built-in broker "default"
+#         WebLogic ConnectionFactory ScottCF (jms/CF) -> pooled factory ScottCF (java:/jms/CF)
+#         WebLogic Queue ScottQueueParams (jms/scottQueue) -> queue ScottQueueParams
+/profile=full-ha/subsystem=messaging-activemq/server=default/pooled-connection-factory=ScottCF:add(connectors=[in-vm],entries=["java:/jms/CF"],transaction=xa)
+
+/profile=full-ha/subsystem=messaging-activemq/server=default/jms-queue=ScottQueueParams:add(entries=["java:/jms/scottQueue","java:/jms/queue/scottQueue","java:jboss/exported/jms/queue/scottQueue"],durable=true)
+
+# Password the brokers in this server group use to cluster with each other
+/profile=full-ha/subsystem=messaging-activemq/server=default:write-attribute(name=cluster-password,value=$msgClusterPassword)
+
+# STEP 4: Server group app_cluster (WebLogic cluster) on profile full-ha.
+#         Every server in the group gets everything in the profile,
+#         so scottDS, ScottCF and ScottQueueParams are available on all of them.
+/server-group=app_cluster:add(profile=full-ha,socket-binding-group=full-ha-sockets)
+/server-group=app_cluster/jvm=default:add(heap-size=256m,max-heap-size=1024m)
+
+# STEP 5: Server my_server (WebLogic managed server) in app_cluster.
+#         Port offset 921: HTTP 8080 + 921 = 9001. All its ports shift by 921,
+#         so it never collides with the sample servers.
+/host=$hostName/server-config=my_server:add(group=app_cluster,socket-binding-port-offset=921,auto-start=true)
+
+run-batch
+
+
+# ---------------------------------------------------------------------------
+# STEP 6 (optional): stop WildFly's sample servers to free memory.
+#                    Remove the leading '#' to run these.
+# ---------------------------------------------------------------------------
+# /host=$hostName/server-config=server-one:stop(blocking=true)
+# /host=$hostName/server-config=server-two:stop(blocking=true)
+
+
+# ---------------------------------------------------------------------------
+# STEP 7: Start my_server
+# ---------------------------------------------------------------------------
+/host=$hostName/server-config=my_server:start(blocking=true)
+
+
+# ---------------------------------------------------------------------------
+# STEP 8: Deploy the five applications to the server group
+# ---------------------------------------------------------------------------
+deploy $appDir/ejb-jsp-app.ear        --server-groups=app_cluster
+deploy $appDir/scott-jdbc-app.war     --server-groups=app_cluster
+deploy $appDir/scott-jms-jdbc-app.war --server-groups=app_cluster
+deploy $appDir/rest-app.war           --server-groups=app_cluster
+deploy $appDir/servlet-app.war        --server-groups=app_cluster
+
+
+# ---------------------------------------------------------------------------
+# STEP 9: Verify
+# ---------------------------------------------------------------------------
+# Server is up
+/host=$hostName/server-config=my_server:read-attribute(name=status)
+
+# DataSource reaches the database
+/host=$hostName/server=my_server/subsystem=datasources/data-source=scottDS:test-connection-in-pool
+
+# Queue exists on the server
+/host=$hostName/server=my_server/subsystem=messaging-activemq/server=default/jms-queue=ScottQueueParams:read-attribute(name=message-count)
+
+# Every deployment is OK
+/host=$hostName/server=my_server/deployment=ejb-jsp-app.ear:read-attribute(name=status)
+/host=$hostName/server=my_server/deployment=scott-jdbc-app.war:read-attribute(name=status)
+/host=$hostName/server=my_server/deployment=scott-jms-jdbc-app.war:read-attribute(name=status)
+/host=$hostName/server=my_server/deployment=rest-app.war:read-attribute(name=status)
+/host=$hostName/server=my_server/deployment=servlet-app.war:read-attribute(name=status)

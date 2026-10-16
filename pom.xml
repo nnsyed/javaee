@@ -1,0 +1,160 @@
+<project xmlns="http://apache.org"
+         xmlns:xsi="http://w3.org"
+         xsi:schemaLocation="http://apache.org http://apache.org">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <groupId>com.example</groupId>
+    <artifactId>root-parentparen</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>ejb-jsp-app</module>
+        <module>jdbc-app</module>
+        <module>jms-app</module>
+        <module>rest-app</module>
+        <module>servlet-app</module>
+    </modules>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        
+        <!-- Network Connection Parameters for WildFly (HTTP Management API) -->
+        <wildfly.host>localhost</wildfly.host>
+        <wildfly.port>9990</wildfly.port>
+        
+        <!-- Network Connection Parameters for WebLogic (T3 Administration Protocol) -->
+        <weblogic.adminurl>t3://localhost:7001</weblogic.adminurl>
+        <weblogic.user>weblogic</weblogic.user>
+        <weblogic.password>Welcome1</weblogic.password>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Central WildFly Engine Management -->
+                <plugin>
+                    <groupId>org.wildfly.plugins</groupId>
+                    <artifactId>wildfly-maven-plugin</artifactId>
+                    <version>5.0.1.Final</version>
+                    <configuration>
+                        <hostname>${wildfly.host}</hostname>
+                        <port>${wildfly.port}</port>
+                        <force>true</force>
+                    </configuration>
+                </plugin>
+
+                <!-- Central WebLogic Engine Management -->
+                <plugin>
+                    <groupId>com.oracle.weblogic</groupId>
+                    <artifactId>weblogic-maven-plugin</artifactId>
+                    <version>14.1.1.0-0-0</version>
+                    <configuration>
+                        <adminurl>${weblogic.adminurl}</adminurl>
+                        <user>${weblogic.user}</user>
+                        <password>${weblogic.password}</password>
+                        <action>deploy</action>
+                        <upload>true</upload>
+                        <verbose>true</verbose>
+                        <source>${project.build.directory}/${project.build.finalName}.${project.packaging}</source>
+                        <name>${project.build.finalName}</name>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- 1. Custom Clean Configuration: Drops the entire root /artifacts and domains directory -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.4.0</version>
+                <configuration>
+                    <filesets>
+                        <fileset>
+                            <directory>${project.basedir}/artifacts</directory>
+                            <followSymlinks>true</followSymlinks>
+                        </fileset>
+                        <fileset>
+                            <directory>${project.basedir}/domains</directory>
+                            <followSymlinks>true</followSymlinks>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
+
+            <!-- 2. Flatten Configuration: Gathers only .war and .ear files at root level -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>flatten-artifacts</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${project.basedir}/domains"/>
+                                <mkdir dir="${project.basedir}/artifacts"/>
+                                <copy todir="${project.basedir}/artifacts" flatten="true">
+                                    <fileset dir="${project.basedir}">
+                                        <include name="**/target/*.war"/>
+                                        <include name="**/target/*.ear"/>
+                                    </fileset>
+                                </copy>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- Profiles allow you to selectively toggle mass target deployments -->
+    <profiles>
+        <profile>
+            <id>deploy-wildfly</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.wildfly.plugins</groupId>
+                        <artifactId>wildfly-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>wildfly-auto-deploy</id>
+                                <phase>deploy</phase>
+                                <goals>
+                                    <goal>deploy</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <profile>
+            <id>deploy-weblogic</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.oracle.weblogic</groupId>
+                        <artifactId>weblogic-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>weblogic-auto-deploy</id>
+                                <phase>deploy</phase>
+                                <goals>
+                                    <goal>deploy</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

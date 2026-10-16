@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maps the web.xml references to WildFly JNDI names.
+     These names must match the resources defined in the WildFly configuration. -->
+<jboss-web>
+
+  <context-root>/scottdbapp</context-root>
+
+  <!-- Must equal the jndi-name of the datasource in the datasources subsystem -->
+  <resource-ref>
+    <res-ref-name>jdbc/scottDS</res-ref-name>
+    <jndi-name>java:jboss/datasources/scottDS</jndi-name>
+  </resource-ref>
+
+
+</jboss-web>

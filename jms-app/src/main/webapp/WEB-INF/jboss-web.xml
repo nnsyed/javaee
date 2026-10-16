@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maps the web.xml references to WildFly JNDI names.
+     These names must match the resources defined in the WildFly configuration. -->
+<jboss-web>
+
+  <context-root>/scottapp</context-root>
+
+  <!-- Must equal the jndi-name of the datasource in the datasources subsystem -->
+  <resource-ref>
+    <res-ref-name>jdbc/scottDS</res-ref-name>
+    <jndi-name>java:jboss/datasources/scottDS</jndi-name>
+  </resource-ref>
+
+  <!-- JmsXA is WildFly's pooled, transaction-aware connection factory for
+       in-server application code -->
+  <resource-ref>
+    <res-ref-name>jms/connectionFactory</res-ref-name>
+    <jndi-name>java:/JmsXA</jndi-name>
+  </resource-ref>
+
+  <!-- Destination: resource-env-ref, matching web.xml -->
+  <resource-env-ref>
+    <resource-env-ref-name>jms/scottQueue</resource-env-ref-name>
+    <jndi-name>java:/jms/queue/scottQueue</jndi-name>
+  </resource-env-ref>
+
+</jboss-web>

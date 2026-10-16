@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Maps the web.xml references to the JNDI names created by create_domain.py -->
+<wls:weblogic-web-app xmlns:wls="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+                      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <!-- DataSource 'scottDS' -->
+  <wls:resource-description>
+    <wls:res-ref-name>jdbc/scottDS</wls:res-ref-name>
+    <wls:jndi-name>jdbc/scottDS</wls:jndi-name>
+  </wls:resource-description>
+
+  <wls:context-root>/scottdbapp</wls:context-root>
+
+</wls:weblogic-web-app>
