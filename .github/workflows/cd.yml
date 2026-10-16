@@ -1,0 +1,40 @@
+name: Continuous Deployment
+
+on:
+  push:
+    branches: [ "main" ] # Change to your default branch name if different
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Check out the repository code
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # Step 2: Set up Java JDK 8 (Matches Java EE 8 / WildFly target)
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'temurin'
+        cache: 'maven' # Automatically caches Maven dependencies for faster builds
+
+    # Step 3: Package all modules via the root POM
+      # - name: Build and Package Multi-Module Project
+      #run: mvn clean package -Dmaven.deploy.skip=true
+    - name: Build Specific Directories Sequentially
+      run: |
+        echo "Hello from GitHub Actions!! Running the builds."
+        mvn clean package -pl servlet-app
+        mvn clean package -pl ejb-jsp-app
+        mvn clean package -pl rest-app
+        mvn clean package -pl jdbc-app
+        echo "done with the builds."
+    # Step 4: Add your CD Deployment commands here
+    # Example: If deploying via wildfly-maven-plugin using a profile:
+    # - name: Deploy to WildFly
+    #   run: mvn wildfly:deploy -P deploy-wildfly -Dwildfly.hostname=${{ secrets.WILDFLY_HOST }}
